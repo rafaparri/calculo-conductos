@@ -277,6 +277,7 @@ function perdida(q, L, n, geo){
   return {v,paM,pt};
 }
 const num=s=>{if(s===null||s===undefined)return NaN;const x=parseFloat(String(s).replace(',','.'));return isFinite(x)?x:NaN};
+const extra=r=>(num(r.difusion)||0)+(num(r.adicional)||0);
 const fmt=(x,d=2)=>isFinite(x)?x.toLocaleString('es-ES',{minimumFractionDigits:d,maximumFractionDigits:d}):'—';
 const dm=x=>x.toLocaleString('es-ES',{maximumFractionDigits:1});
 const uid=()=>Math.random().toString(36).slice(2,10)+Date.now().toString(36).slice(-4);
@@ -459,7 +460,7 @@ function newTramo(red,prev){
   return t;
 }
 function newRed(nombre){
-  const r={id:uid(),nombre:nombre||'Circuito 1',tipoCirc:'Extracción',equipo:'',vmax:'4',alto:'200',nudoVent:'',difusion:'',difusionNota:'',tipoDef:'fibra',tramos:[]};
+  const r={id:uid(),nombre:nombre||'Circuito 1',tipoCirc:'Extracción',equipo:'',vmax:'4',alto:'200',nudoVent:'',difusion:'',difusionNota:'',adicional:'',adicionalNota:'',tipoDef:'fibra',tramos:[]};
   r.tramos.push(newTramo(r)); return r;
 }
 function newProject(){
@@ -497,7 +498,7 @@ function render(){
   if(S.tab!=='med'&&!p.redes.find(r=>r.id===S.tab)) S.tab=p.redes[0]?p.redes[0].id:'med';
   if(isMob()) return renderMob(p);
   const calcs=p.redes.map(r=>calcRed(r,p.cfg));
-  const tabs=p.redes.map((r,i)=>{const tot=calcs[i].maxP+(num(r.difusion)||0);return `<button type="button" class="tab ${S.tab===r.id?'on':''}" data-tab="${r.id}">${esc(r.nombre||'Circuito')}<span class="pa num">${fmt(tot,0)} Pa</span></button>`}).join('');
+  const tabs=p.redes.map((r,i)=>{const tot=calcs[i].maxP+extra(r);return `<button type="button" class="tab ${S.tab===r.id?'on':''}" data-tab="${r.id}">${esc(r.nombre||'Circuito')}<span class="pa num">${fmt(tot,0)} Pa</span></button>`}).join('');
   const c=p.cfg;
   main.innerHTML=`
   <section class="card">
@@ -541,7 +542,7 @@ function render(){
 
 function redHTML(p,red,calc){
   const rowsH=red.tramos.map((t,ix)=>rowHTML(red,t,calc,ix)).join('');
-  const dif=num(red.difusion)||0;
+  const dif=num(red.difusion)||0, adi=num(red.adicional)||0;
   const fanTxt=calc.fan?(calc.fanAuto?`auto: ${esc(calc.fan)}`:''):'';
   return `
   <section class="card" style="display:flex;flex-direction:column;gap:14px">
@@ -587,9 +588,10 @@ function redHTML(p,red,calc){
     <div class="pgrid">
       <div class="pbox"><span class="lbl">Conductos (calculado)</span><span class="val num" id="o_cond">${fmt(calc.maxP,1)}<small>Pa</small></span><span class="sub">Tramos del recorrido más desfavorable</span></div>
       <div class="op">+</div>
-      <div class="pbox"><span class="lbl"><label for="r_dif">Elemento de difusión</label></span><span class="difv"><input id="r_dif" inputmode="decimal" data-r="difusion" value="${esc(red.difusion)}" placeholder="0"><b style="font-size:18px">Pa</b></span><input aria-label="Descripción del elemento de difusión" data-r="difusionNota" value="${esc(red.difusionNota)}" placeholder="p. ej. Boca KVE Ø125, apertura 10 mm"></div>
+      <div class="pbox"><span class="lbl"><label for="r_dif">Elemento terminal / difusión</label></span><span class="difv"><input id="r_dif" inputmode="decimal" data-r="difusion" value="${esc(red.difusion)}" placeholder="0"><b style="font-size:18px">Pa</b></span><input aria-label="Descripción del elemento terminal" data-r="difusionNota" value="${esc(red.difusionNota)}" placeholder="p. ej. Boca KVE Ø125, apertura 10 mm">
+        <span class="lbl" style="margin-top:10px"><label for="r_adi">Elemento adicional</label></span><span class="difv"><input id="r_adi" inputmode="decimal" data-r="adicional" value="${esc(red.adicional||'')}" placeholder="0"><b style="font-size:18px">Pa</b></span><input aria-label="Descripción del elemento adicional" data-r="adicionalNota" value="${esc(red.adicionalNota||'')}" placeholder="p. ej. Compuerta, filtro, rejilla exterior"></div>
       <div class="op">=</div>
-      <div class="pbox tot"><span class="lbl">Pérdida de carga total</span><span class="val num" id="o_tot">${fmt(calc.maxP+dif,1)}<small>Pa</small></span><span class="sub" id="o_tot2">${fmt(calc.maxP,1)} conductos + ${fmt(dif,1)} difusión</span></div>
+      <div class="pbox tot"><span class="lbl">Pérdida de carga total</span><span class="val num" id="o_tot">${fmt(calc.maxP+dif+adi,1)}<small>Pa</small></span><span class="sub" id="o_tot2">${fmt(calc.maxP,1)} conductos + ${fmt(dif,1)} terminal + ${fmt(adi,1)} adicional</span></div>
     </div>
   </section>
 
@@ -658,9 +660,9 @@ function projMedHTML(p,calcs){
   const all=mergeMed(meds);
   const mch=(num(p.cfg.mermaChapa)||0)/100, mfi=(num(p.cfg.mermaFibra)||0)/100;
   const sum=(m,g)=>[...m[g].values()].reduce((s,e)=>s+(g==='circ'?e.ml:e.m2),0);
-  const rows=p.redes.map((r,i)=>{const d=num(r.difusion)||0;return `<tr><td>${esc(r.nombre)}</td><td>${fmt(calcs[i].maxP,1)}</td><td>${fmt(d,1)}</td><td><b>${fmt(calcs[i].maxP+d,1)}</b></td><td>${fmt(sum(meds[i],'chapa')*(1+mch),2)}</td><td>${fmt(sum(meds[i],'fibra')*(1+mfi),2)}</td><td>${fmt(sum(meds[i],'circ'),2)}</td></tr>`}).join('');
+  const rows=p.redes.map((r,i)=>{const d=num(r.difusion)||0, a=num(r.adicional)||0;return `<tr><td>${esc(r.nombre)}</td><td>${fmt(calcs[i].maxP,1)}</td><td>${fmt(d,1)}</td><td>${fmt(a,1)}</td><td><b>${fmt(calcs[i].maxP+d+a,1)}</b></td><td>${fmt(sum(meds[i],'chapa')*(1+mch),2)}</td><td>${fmt(sum(meds[i],'fibra')*(1+mfi),2)}</td><td>${fmt(sum(meds[i],'circ'),2)}</td></tr>`}).join('');
   return `<section class="card"><div class="sec-h"><h2>Resumen por circuito</h2><span class="hint">Medición con mermas incluidas</span></div>
-    <div class="tblwrap"><table class="mt"><thead><tr><th>Circuito</th><th>Conductos Pa</th><th>Difusión Pa</th><th>Total Pa</th><th>Chapa rect. m²</th><th>Fibra m²</th><th>Circular ml</th></tr></thead><tbody>${rows}</tbody></table></div></section>
+    <div class="tblwrap"><table class="mt"><thead><tr><th>Circuito</th><th>Conductos Pa</th><th>Terminal Pa</th><th>Adicional Pa</th><th>Total Pa</th><th>Chapa rect. m²</th><th>Fibra m²</th><th>Circular ml</th></tr></thead><tbody>${rows}</tbody></table></div></section>
     <section class="card"><div class="sec-h"><h2>Medición total del proyecto</h2><span class="hint">${p.redes.length} ${p.redes.length===1?'circuito':'circuitos'}</span></div>${medHTML(all,p.cfg)}</section>`;
 }
 
@@ -676,7 +678,7 @@ function renderMob(p){
   if(!p.redes.find(r=>r.id===S.tab)) S.tab=p.redes[0].id;
   const red=curRed(), calc=calcRed(red,p.cfg);
   const st=S.step=Math.min(4,Math.max(1,S.step||1));
-  const dif=num(red.difusion)||0, tot=calc.maxP+dif;
+  const dif=num(red.difusion)||0, adi=num(red.adicional)||0, tot=calc.maxP+dif+adi;
   let body='';
   if(st===1) body=`<section class="card mcard"><h2>Datos del proyecto</h2><div class="mf">
       <div class="fld big"><label for="p_nombre">Proyecto</label><input id="p_nombre" data-p="nombre" value="${esc(p.nombre)}"></div>
@@ -700,6 +702,8 @@ function renderMob(p){
         ${mfld('r_alto','Alto de conducto por defecto (mm)','inputmode="decimal" data-r="alto"',red.alto)}
         ${mfld('r_dif','Pérdida en elemento terminal / difusión (Pa)','inputmode="decimal" data-r="difusion"',red.difusion,'placeholder="0"')}
         ${mfld('r_difn','Descripción del elemento terminal','data-r="difusionNota"',red.difusionNota,'placeholder="p. ej. Boca KVE Ø125"')}
+        ${mfld('r_adi','Pérdida en elemento adicional (Pa)','inputmode="decimal" data-r="adicional"',red.adicional||'','placeholder="0"')}
+        ${mfld('r_adin','Descripción del elemento adicional','data-r="adicionalNota"',red.adicionalNota||'','placeholder="p. ej. Compuerta, filtro"')}
         ${mfld('r_eq','Equipo / ventilador','data-r="equipo"',red.equipo||'')}
         ${mfld('r_vent','Nudo del ventilador','data-r="nudoVent"',red.nudoVent,`placeholder="${esc(fanTxt)}"`)}
       </div></section>`;
@@ -708,7 +712,7 @@ function renderMob(p){
     <div id="tb" class="tcards">${red.tramos.map((t,ix)=>cardHTML(red,t,calc,ix)).join('')}</div>
     <button class="btn pri big" type="button" data-act="addRow">+ Añadir tramo</button>`;
   if(st===4) body=`<section class="card mcard mres"><h2>Resultado</h2>
-      <div class="mtot"><span class="lbl">Pérdida de carga total · ${esc(red.nombre||'Circuito')}</span><span class="val">${fmt(tot,1)} Pa</span><span class="sub">${fmt(calc.maxP,1)} conductos + ${fmt(dif,1)} elemento terminal</span></div>
+      <div class="mtot"><span class="lbl">Pérdida de carga total · ${esc(red.nombre||'Circuito')}</span><span class="val">${fmt(tot,1)} Pa</span><span class="sub">${fmt(calc.maxP,1)} conductos + ${fmt(dif,1)} terminal + ${fmt(adi,1)} adicional</span></div>
       <p class="path">${pathTxt(calc)}</p>
       <div class="row"><button class="btn pri" type="button" data-act="pdfRed">Informe PDF del circuito</button><button class="btn" type="button" data-act="pdf">PDF del proyecto</button></div>
     </section>
@@ -755,7 +759,7 @@ function mobRefresh(p){
     } else c.replaceWith(nc);
   });
   const set=(id,h)=>{const e=document.getElementById(id); if(e) e.textContent=h;};
-  set('o_mtot',fmt(calc.maxP+(num(red.difusion)||0),1)+' Pa');
+  set('o_mtot',fmt(calc.maxP+extra(red),1)+' Pa');
   set('m_rname',red.nombre||'Circuito');
   set('m_pname',p.nombre||'Proyecto');
   const vent=document.getElementById('r_vent'); if(vent) vent.placeholder=calc.fan&&calc.fanAuto?'auto: '+calc.fan:'';
@@ -769,7 +773,7 @@ function refresh(){
   renderSide();
   const tabsEl=document.querySelectorAll('.tab[data-tab]');
   const calcs=p.redes.map(r=>calcRed(r,p.cfg));
-  tabsEl.forEach(b=>{const i=p.redes.findIndex(r=>r.id===b.dataset.tab); if(i>=0){const pa=b.querySelector('.pa'); if(pa) pa.textContent=fmt(calcs[i].maxP+(num(p.redes[i].difusion)||0),0)+' Pa'; const nm=b.firstChild; if(nm) nm.textContent=p.redes[i].nombre||'Circuito';}});
+  tabsEl.forEach(b=>{const i=p.redes.findIndex(r=>r.id===b.dataset.tab); if(i>=0){const pa=b.querySelector('.pa'); if(pa) pa.textContent=fmt(calcs[i].maxP+extra(p.redes[i]),0)+' Pa'; const nm=b.firstChild; if(nm) nm.textContent=p.redes[i].nombre||'Circuito';}});
   if(S.tab==='med'){ document.getElementById('view').innerHTML=projMedHTML(p,calcs); return; }
   const ix=p.redes.findIndex(r=>r.id===S.tab); if(ix<0) return;
   const red=p.redes[ix], calc=calcs[ix];
@@ -783,11 +787,11 @@ function refresh(){
       ['alto','ancho','diam'].forEach(k=>{const a=tr.querySelector(`input[data-k="${k}"]`),b=nr.querySelector(`input[data-k="${k}"]`); if(a&&b&&a!==ae){ a.value=b.value; a.className=b.className; a.title=b.title; }});
     } else { const tmp=document.createElement('tbody'); tmp.innerHTML=rowHTML(red,t,calc,i); tr.replaceWith(tmp.firstElementChild); }
   });
-  const dif=num(red.difusion)||0;
+  const dif=num(red.difusion)||0, adi=num(red.adicional)||0;
   const set=(id,h)=>{const e=document.getElementById(id); if(e) e.innerHTML=h;};
   set('o_cond',fmt(calc.maxP,1)+'<small>Pa</small>');
-  set('o_tot',fmt(calc.maxP+dif,1)+'<small>Pa</small>');
-  set('o_tot2',`${fmt(calc.maxP,1)} conductos + ${fmt(dif,1)} difusión`);
+  set('o_tot',fmt(calc.maxP+dif+adi,1)+'<small>Pa</small>');
+  set('o_tot2',`${fmt(calc.maxP,1)} conductos + ${fmt(dif,1)} terminal + ${fmt(adi,1)} adicional`);
   set('pathTxt',pathTxt(calc));
   set('medRed',medHTML(medRed(red,calc,p.cfg),p.cfg));
   const vent=document.getElementById('r_vent'); if(vent) vent.placeholder=calc.fan&&calc.fanAuto?'auto: '+calc.fan:'';
@@ -933,8 +937,8 @@ async function exportPdf(p,onlyRed){
   // 3. Resumen
   if(!onlyRed){
     y=h2('3. Resumen de pérdidas de carga por circuito',y+8);
-    const body=p.redes.map((r,i)=>{const d=num(r.difusion)||0; const qmax=Math.max(0,...calcs[i].rows.filter(x=>x.ok).map(x=>x.q)); return [pdfT(r.nombre),pdfT(r.tipoCirc||''),pdfT(r.equipo||''),R(qmax,0),R(calcs[i].maxP,1),R(d,1),R(calcs[i].maxP+d,1)];});
-    y=tbl({startY:y,head:[['Circuito','Tipo','Equipo','Caudal máx. m³/h','Conductos Pa','Difusión Pa','Total Pa']].map(r=>r.map(pdfT)),body,columnStyles:{3:{halign:'right'},4:{halign:'right'},5:{halign:'right'},6:{halign:'right',fontStyle:'bold'}}});
+    const body=p.redes.map((r,i)=>{const d=num(r.difusion)||0, a=num(r.adicional)||0; const qmax=Math.max(0,...calcs[i].rows.filter(x=>x.ok).map(x=>x.q)); return [pdfT(r.nombre),pdfT(r.tipoCirc||''),pdfT(r.equipo||''),R(qmax,0),R(calcs[i].maxP,1),R(d,1),R(a,1),R(calcs[i].maxP+d+a,1)];});
+    y=tbl({startY:y,head:[['Circuito','Tipo','Equipo','Caudal máx. m³/h','Conductos Pa','Terminal Pa','Adicional Pa','Total Pa']].map(r=>r.map(pdfT)),body,columnStyles:{3:{halign:'right'},4:{halign:'right'},5:{halign:'right'},6:{halign:'right'},7:{halign:'right',fontStyle:'bold'}}});
   }
   // 4. Circuitos
   let sec=onlyRed?3:4;
@@ -942,7 +946,7 @@ async function exportPdf(p,onlyRed){
     const ix=p.redes.indexOf(red), c=calcs[ix];
     doc.addPage(); header(); y=top+6;
     y=h2(`${sec}. Circuito: ${red.nombre||''}`,y);
-    const d=num(red.difusion)||0;
+    const d=num(red.difusion)||0, a=num(red.adicional)||0;
     y=tbl({startY:y,theme:'plain',styles:{font:'helvetica',fontSize:9.5,cellPadding:1.2},columnStyles:{0:{fontStyle:'bold',textColor:GREY,cellWidth:42},2:{fontStyle:'bold',textColor:GREY,cellWidth:38}},
       body:[[ 'Tipo de circuito',pdfT(red.tipoCirc||'—'),'Equipo / ventilador',pdfT(red.equipo||'—')],
             ['Velocidad máxima',R(num(red.vmax)||0,1)+' m/s','Nudo ventilador',pdfT(c.fan||'—')],
@@ -958,9 +962,9 @@ async function exportPdf(p,onlyRed){
     doc.setFont('helvetica','italic'); doc.setFontSize(8); doc.setTextColor(...GREY); doc.text('* Tramo del recorrido más desfavorable.',M,y+4);
     // pérdidas
     y=h2(`${sec}.2 Pérdida de carga`,y+12);
-    y=tbl({startY:y,body:[['Conductos (recorrido más desfavorable)',R(c.maxP,1)+' Pa'],['Elemento de difusión'+(red.difusionNota?(': '+red.difusionNota):''),R(d,1)+' Pa'],['PÉRDIDA DE CARGA TOTAL',R(c.maxP+d,1)+' Pa']].map(r=>r.map(pdfT)),
+    y=tbl({startY:y,body:[['Conductos (recorrido más desfavorable)',R(c.maxP,1)+' Pa'],['Elemento terminal / difusión'+(red.difusionNota?(': '+red.difusionNota):''),R(d,1)+' Pa'],['Elemento adicional'+(red.adicionalNota?(': '+red.adicionalNota):''),R(a,1)+' Pa'],['PÉRDIDA DE CARGA TOTAL',R(c.maxP+d+a,1)+' Pa']].map(r=>r.map(pdfT)),
       styles:{font:'helvetica',fontSize:10,cellPadding:2.2},columnStyles:{1:{halign:'right',cellWidth:40}},
-      didParseCell:h=>{ if(h.row.index===2){ h.cell.styles.fillColor=BLUE; h.cell.styles.textColor=255; h.cell.styles.fontStyle='bold'; } }});
+      didParseCell:h=>{ if(h.row.index===3){ h.cell.styles.fillColor=BLUE; h.cell.styles.textColor=255; h.cell.styles.fontStyle='bold'; } }});
     // medición circuito
     y=h2(`${sec}.3 Medición del circuito`,y+9);
     y=pdfMed(medRed(red,c,p.cfg),y);
@@ -1017,8 +1021,8 @@ function tableRows(p,red){
 }
 async function copyTsv(p,red,btn){
   const {head,body,c}=tableRows(p,red);
-  const dif=num(red.difusion)||0;
-  const lines=[head,...body,[],['Conductos (Pa)',c.maxP.toFixed(2)],['Elemento de difusión (Pa)',dif.toFixed(2),red.difusionNota||''],['Total (Pa)',(c.maxP+dif).toFixed(2)]];
+  const dif=num(red.difusion)||0, adi=num(red.adicional)||0;
+  const lines=[head,...body,[],['Conductos (Pa)',c.maxP.toFixed(2)],['Elemento terminal (Pa)',dif.toFixed(2),red.difusionNota||''],['Elemento adicional (Pa)',adi.toFixed(2),red.adicionalNota||''],['Total (Pa)',(c.maxP+dif+adi).toFixed(2)]];
   const txt=lines.map(r=>r.map(x=>typeof x==='number'?String(x).replace('.',','):String(x??'')).join('\t')).join('\n');
   try{ await navigator.clipboard.writeText(txt); toast('Tabla copiada. Pégala en Excel.'); }
   catch(e){ const ta=document.createElement('textarea'); ta.value=txt; document.body.appendChild(ta); ta.select(); try{document.execCommand('copy'); toast('Tabla copiada. Pégala en Excel.');}catch(_){toast('No se pudo copiar.');} ta.remove(); }
@@ -1031,9 +1035,9 @@ async function exportXlsx(p,btn){
   const meds=p.redes.map((r,i)=>medRed(r,calcs[i],p.cfg)); const all=mergeMed(meds);
   const mch=(num(p.cfg.mermaChapa)||0)/100, mfi=(num(p.cfg.mermaFibra)||0)/100;
   const R=(x,d=2)=>Math.round(x*10**d)/10**d;
-  const res=[['Estudio',p.estudio||''],['Proyecto',p.nombre],['Cliente',p.cliente],['Emplazamiento',p.emplazamiento||''],['Nº oferta',p.oferta],['Fecha',p.fecha],['Redactado por',p.autor||''],[],['Circuito','Tipo','Equipo','Velocidad máx. m/s','Conductos Pa','Elemento difusión Pa','Descripción difusión','Total Pa']];
-  p.redes.forEach((r,i)=>{const d=num(r.difusion)||0; res.push([r.nombre,r.tipoCirc||'',r.equipo||'',num(r.vmax),R(calcs[i].maxP),d,r.difusionNota||'',R(calcs[i].maxP+d)]);});
-  const ws0=X.utils.aoa_to_sheet(res); ws0['!cols']=[{wch:28},{wch:14},{wch:20},{wch:16},{wch:14},{wch:18},{wch:30},{wch:12}]; X.utils.book_append_sheet(wb,ws0,'Resumen');
+  const res=[['Estudio',p.estudio||''],['Proyecto',p.nombre],['Cliente',p.cliente],['Emplazamiento',p.emplazamiento||''],['Nº oferta',p.oferta],['Fecha',p.fecha],['Redactado por',p.autor||''],[],['Circuito','Tipo','Equipo','Velocidad máx. m/s','Conductos Pa','Elemento terminal Pa','Descripción terminal','Elemento adicional Pa','Descripción adicional','Total Pa']];
+  p.redes.forEach((r,i)=>{const d=num(r.difusion)||0, a=num(r.adicional)||0; res.push([r.nombre,r.tipoCirc||'',r.equipo||'',num(r.vmax),R(calcs[i].maxP),d,r.difusionNota||'',a,r.adicionalNota||'',R(calcs[i].maxP+d+a)]);});
+  const ws0=X.utils.aoa_to_sheet(res); ws0['!cols']=[{wch:28},{wch:14},{wch:20},{wch:16},{wch:14},{wch:18},{wch:30},{wch:18},{wch:30},{wch:12}]; X.utils.book_append_sheet(wb,ws0,'Resumen');
   const med=[['MEDICIÓN DEL PROYECTO'],[],['Chapa rectangular','Sección mm','ml','Codos','m²']];
   const add=(g,lab,merma)=>{ const l=[...g.values()].sort((a,b)=>b.sort-a.sort); let t=0; l.forEach(e=>{med.push(['',e.k,R(e.ml),e.codos,R(e.m2)]); t+=e.m2;}); med.push(['','Neto','','',R(t)],['','Mermas '+R(merma*100,0)+' %','','',R(t*merma)],['','TOTAL '+lab,'','',R(t*(1+merma))],[]); };
   add(all.chapa,'chapa rectangular (UNE 100716)',mch);
@@ -1042,8 +1046,8 @@ async function exportXlsx(p,btn){
   med.push(['Chapa circular','Ø mm','ml','Codos']); let tc=0; [...all.circ.values()].sort((a,b)=>b.sort-a.sort).forEach(e=>{med.push(['',e.k,R(e.ml),e.codos]); tc+=e.ml;}); med.push(['','TOTAL ml',R(tc)]);
   const ws1=X.utils.aoa_to_sheet(med); ws1['!cols']=[{wch:20},{wch:22},{wch:10},{wch:8},{wch:10}]; X.utils.book_append_sheet(wb,ws1,'Medición');
   const used=new Set(['Resumen','Medición']);
-  p.redes.forEach((r,i)=>{ const {head,body,c}=tableRows(p,r); const d=num(r.difusion)||0;
-    const aoa=[['Circuito',r.nombre],['Tipo',r.tipoCirc||''],['Equipo / ventilador',r.equipo||''],['Velocidad máx. (m/s)',num(r.vmax)],[],head,...body,[],['Conductos (Pa)',R(c.maxP)],['Elemento de difusión (Pa)',d,r.difusionNota||''],['Total (Pa)',R(c.maxP+d)]];
+  p.redes.forEach((r,i)=>{ const {head,body,c}=tableRows(p,r); const d=num(r.difusion)||0, a=num(r.adicional)||0;
+    const aoa=[['Circuito',r.nombre],['Tipo',r.tipoCirc||''],['Equipo / ventilador',r.equipo||''],['Velocidad máx. (m/s)',num(r.vmax)],[],head,...body,[],['Conductos (Pa)',R(c.maxP)],['Elemento terminal (Pa)',d,r.difusionNota||''],['Elemento adicional (Pa)',a,r.adicionalNota||''],['Total (Pa)',R(c.maxP+d+a)]];
     const ws=X.utils.aoa_to_sheet(aoa); ws['!cols']=head.map((h,j)=>({wch:j===5?18:11}));
     let nm=(r.nombre||'Red').replace(/[\\\/\?\*\[\]:]/g,'').slice(0,28)||'Red'; let k=nm,n=2; while(used.has(k)) k=nm.slice(0,25)+' '+(n++); used.add(k);
     X.utils.book_append_sheet(wb,ws,k); });
